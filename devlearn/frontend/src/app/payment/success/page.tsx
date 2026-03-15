@@ -33,4 +33,8 @@ export default function PaymentSuccess() {
       <PaymentSuccessContent />
     </Suspense>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> d59fa3fcde9cd60447e238384ce2f418edea4e37

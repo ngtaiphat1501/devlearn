@@ -53,6 +53,7 @@ model User {
   instructorCourses Course[] @relation("InstructorCourses")
 
   createdAt     DateTime @default(now())
+  instructorCourses Course[] @relation("InstructorCourses")
   updatedAt     DateTime @updatedAt
 
   @@map("users")
