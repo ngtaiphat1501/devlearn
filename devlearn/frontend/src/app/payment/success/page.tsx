@@ -2,9 +2,10 @@
 'use client';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import { Navbar } from '@/components/layout/Navbar';
 
-export default function PaymentSuccess() {
+function PaymentSuccessContent() {
   const params = useSearchParams();
   const orderId = params.get('orderId');
   return (
@@ -23,5 +24,13 @@ export default function PaymentSuccess() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function PaymentSuccess() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <PaymentSuccessContent />
+    </Suspense>
   );
 }
