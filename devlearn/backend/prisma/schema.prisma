@@ -50,6 +50,7 @@ model User {
   quizAttempts  QuizAttempt[]
   certificates  Certificate[]
   progress      LessonProgress[]
+  instructorCourses Course[] @relation("InstructorCourses")
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
