@@ -1,0 +1,232 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ───────────────────────────────────────────────
+enum Role {
+  USER
+  INSTRUCTOR
+  ADMIN
+}
+
+enum Level {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  VNPAY
+  STRIPE
+  MANUAL
+}
+
+// ─── MODELS ──────────────────────────────────────────────
+model User {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  password      String
+  avatar        String?
+  role          Role     @default(USER)
+  isActive      Boolean  @default(true)
+  refreshToken  String?
+
+  enrollments   Enrollment[]
+  orders        Order[]
+  quizAttempts  QuizAttempt[]
+  certificates  Certificate[]
+  progress      LessonProgress[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Category {
+  id      String   @id @default(uuid())
+  name    String   @unique
+  slug    String   @unique
+  courses Course[]
+
+  @@map("categories")
+}
+
+model Course {
+  id           String   @id @default(uuid())
+  title        String
+  slug         String   @unique
+  description  String
+  shortDesc    String
+  thumbnail    String?
+  previewVideo String?
+  price        Float
+  oldPrice     Float?
+  level        Level    @default(BEGINNER)
+  tags         String[]
+  isPublished  Boolean  @default(false)
+  totalLessons Int      @default(0)
+  totalMinutes Int      @default(0)
+
+  categoryId   String
+  category     Category  @relation(fields: [categoryId], references: [id])
+  instructorId String
+  instructor   User      @relation("InstructorCourses", fields: [instructorId], references: [id])
+
+  sections     Section[]
+  enrollments  Enrollment[]
+  orders       OrderItem[]
+  quizzes      Quiz[]
+  certificates Certificate[]
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("courses")
+}
+
+model Section {
+  id       String   @id @default(uuid())
+  title    String
+  position Int
+  courseId String
+  course   Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons  Lesson[]
+
+  @@map("sections")
+}
+
+model Lesson {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  videoUrl    String?
+  duration    Int      @default(0) // minutes
+  position    Int
+  isFree      Boolean  @default(false)
+  sectionId   String
+  section     Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  progress    LessonProgress[]
+
+  @@map("lessons")
+}
+
+model LessonProgress {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  completed   Boolean  @default(false)
+  completedAt DateTime?
+
+  @@unique([userId, lessonId])
+  @@map("lesson_progress")
+}
+
+model Enrollment {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId   String
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  accessGrantedBy String?  // admin userId nếu mở thủ công
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, courseId])
+  @@map("enrollments")
+}
+
+model Order {
+  id            String        @id @default(uuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  items         OrderItem[]
+  totalAmount   Float
+  status        OrderStatus   @default(PENDING)
+  paymentMethod PaymentMethod @default(VNPAY)
+  paymentRef    String?       // mã giao dịch từ cổng thanh toán
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id       String @id @default(uuid())
+  orderId  String
+  order    Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id])
+  price    Float
+
+  @@map("order_items")
+}
+
+model Quiz {
+  id        String         @id @default(uuid())
+  courseId  String
+  course    Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+
+  @@map("quizzes")
+}
+
+model QuizQuestion {
+  id         String   @id @default(uuid())
+  quizId     String
+  quiz       Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  question   String
+  codeSnippet String?
+  options    String[] // JSON array of option strings
+  answer     Int      // index of correct option
+  position   Int
+
+  @@map("quiz_questions")
+}
+
+model QuizAttempt {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  quizId    String
+  quiz      Quiz     @relation(fields: [quizId], references: [id])
+  answers   Int[]    // answer indices submitted
+  score     Int      // number of correct answers
+  total     Int      // total questions
+  passed    Boolean
+  createdAt DateTime @default(now())
+
+  @@map("quiz_attempts")
+}
+
+model Certificate {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  courseId   String
+  course     Course   @relation(fields: [courseId], references: [id])
+  code       String   @unique
+  score      Int
+  total      Int
+  issuedAt   DateTime @default(now())
+
+  @@unique([userId, courseId])
+  @@map("certificates")
+}
