@@ -52,6 +52,7 @@ model User {
   progress      LessonProgress[]
 
   createdAt     DateTime @default(now())
+  instructorCourses Course[] @relation("InstructorCourses")
   updatedAt     DateTime @updatedAt
 
   @@map("users")
