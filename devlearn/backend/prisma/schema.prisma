@@ -1,6 +1,7 @@
 // prisma/schema.prisma
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -45,15 +46,14 @@ model User {
   isActive      Boolean  @default(true)
   refreshToken  String?
 
-  enrollments   Enrollment[]
-  orders        Order[]
-  quizAttempts  QuizAttempt[]
-  certificates  Certificate[]
-  progress      LessonProgress[]
+  enrollments       Enrollment[]
+  orders            Order[]
+  quizAttempts      QuizAttempt[]
+  certificates      Certificate[]
+  progress          LessonProgress[]
   instructorCourses Course[] @relation("InstructorCourses")
 
   createdAt     DateTime @default(now())
-  instructorCourses Course[] @relation("InstructorCourses")
   updatedAt     DateTime @updatedAt
 
   @@map("users")
@@ -117,7 +117,7 @@ model Lesson {
   title       String
   description String?
   videoUrl    String?
-  duration    Int      @default(0) // minutes
+  duration    Int      @default(0)
   position    Int
   isFree      Boolean  @default(false)
   sectionId   String
@@ -141,13 +141,13 @@ model LessonProgress {
 }
 
 model Enrollment {
-  id         String   @id @default(uuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  courseId   String
-  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  accessGrantedBy String?  // admin userId nếu mở thủ công
-  createdAt  DateTime @default(now())
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId        String
+  course          Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  accessGrantedBy String?
+  createdAt       DateTime @default(now())
 
   @@unique([userId, courseId])
   @@map("enrollments")
@@ -161,7 +161,7 @@ model Order {
   totalAmount   Float
   status        OrderStatus   @default(PENDING)
   paymentMethod PaymentMethod @default(VNPAY)
-  paymentRef    String?       // mã giao dịch từ cổng thanh toán
+  paymentRef    String?
   paidAt        DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -191,14 +191,14 @@ model Quiz {
 }
 
 model QuizQuestion {
-  id         String   @id @default(uuid())
-  quizId     String
-  quiz       Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
-  question   String
+  id          String   @id @default(uuid())
+  quizId      String
+  quiz        Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  question    String
   codeSnippet String?
-  options    String[] // JSON array of option strings
-  answer     Int      // index of correct option
-  position   Int
+  options     String[]
+  answer      Int
+  position    Int
 
   @@map("quiz_questions")
 }
@@ -209,9 +209,9 @@ model QuizAttempt {
   user      User     @relation(fields: [userId], references: [id])
   quizId    String
   quiz      Quiz     @relation(fields: [quizId], references: [id])
-  answers   Int[]    // answer indices submitted
-  score     Int      // number of correct answers
-  total     Int      // total questions
+  answers   Int[]
+  score     Int
+  total     Int
   passed    Boolean
   createdAt DateTime @default(now())
 
@@ -219,15 +219,15 @@ model QuizAttempt {
 }
 
 model Certificate {
-  id         String   @id @default(uuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
-  courseId   String
-  course     Course   @relation(fields: [courseId], references: [id])
-  code       String   @unique
-  score      Int
-  total      Int
-  issuedAt   DateTime @default(now())
+  id       String   @id @default(uuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id])
+  courseId String
+  course   Course   @relation(fields: [courseId], references: [id])
+  code     String   @unique
+  score    Int
+  total    Int
+  issuedAt DateTime @default(now())
 
   @@unique([userId, courseId])
   @@map("certificates")
