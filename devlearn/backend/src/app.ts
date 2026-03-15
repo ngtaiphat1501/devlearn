@@ -17,6 +17,9 @@ import { errorHandler } from './middleware/error.middleware';
 
 const app = express();
 
+// ── Trust proxy (required for Render/reverse proxy) ──
+app.set('trust proxy', 1);
+
 // ── Security ──────────────────────────────────────
 app.use(helmet());
 app.use(cors({
