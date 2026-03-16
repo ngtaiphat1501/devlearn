@@ -13,7 +13,7 @@ export default function NewCoursePage() {
   const [error, setError] = useState('');
   const [form, setForm] = useState({
     title: '', shortDesc: '', description: '',
-    price: 499000, originalPrice: 0,
+    price: 499000, oldPrice: 0,
     level: 'BEGINNER', tags: '', thumbnail: '',
   });
 
@@ -26,7 +26,7 @@ export default function NewCoursePage() {
     setSaving(true);
     setError('');
     try {
-      const res = await api.post('/courses', {
+      const res = await api.post('/admin/courses', {
         ...form,
         tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
         slug: form.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Date.now(),
@@ -104,7 +104,7 @@ export default function NewCoursePage() {
             </div>
             <div>
               <label className="block text-[12px] text-[#94a3b8] mb-1.5">Giá gốc (VNĐ)</label>
-              <input type="number" value={form.originalPrice} onChange={e => setForm(p => ({ ...p, originalPrice: Number(e.target.value) }))}
+              <input type="number" value={form.oldPrice} onChange={e => setForm(p => ({ ...p, oldPrice: Number(e.target.value) }))}
                 className="w-full bg-background border border-border2 rounded-lg px-3 py-2 text-[14px] focus:border-acc outline-none transition-colors" />
             </div>
           </div>
