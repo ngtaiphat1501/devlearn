@@ -155,3 +155,69 @@ export const getCategories = async (_req: any, res: Response, next: NextFunction
     res.json(categories);
   } catch (err) { next(err); }
 };
+export const getCourseById = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const course = await prisma.course.findUnique({
+      where: { id },
+      include: {
+        sections: {
+          orderBy: { position: 'asc' },
+          include: { lessons: { orderBy: { position: 'asc' } } },
+        },
+      },
+    });
+    if (!course) throw new AppError('Course not found', 404);
+    res.json({ course });
+  } catch (err) { next(err); }
+};
+
+export const addSection = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { title, position } = req.body;
+    const section = await prisma.section.create({
+      data: { title, position: position || 1, courseId: id },
+    });
+    res.json({ section });
+  } catch (err) { next(err); }
+};
+
+export const addLesson = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { sectionId } = req.params;
+    const { title, videoUrl, duration, isFree, position } = req.body;
+    const lesson = await prisma.lesson.create({
+      data: { title, videoUrl: videoUrl || null, duration: duration || 0, isFree: isFree || false, position: position || 1, sectionId },
+    });
+    res.json({ lesson });
+  } catch (err) { next(err); }
+};
+
+export const deleteSection = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { sectionId } = req.params;
+    await prisma.section.delete({ where: { id: sectionId } });
+    res.json({ message: 'Đã xóa chương' });
+  } catch (err) { next(err); }
+};
+
+export const deleteLesson = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { lessonId } = req.params;
+    await prisma.lesson.delete({ where: { id: lessonId } });
+    res.json({ message: 'Đã xóa bài học' });
+  } catch (err) { next(err); }
+};
+
+export const updateLesson = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { lessonId } = req.params;
+    const { title, videoUrl, duration, isFree } = req.body;
+    const lesson = await prisma.lesson.update({
+      where: { id: lessonId },
+      data: { title, videoUrl, duration, isFree },
+    });
+    res.json({ lesson });
+  } catch (err) { next(err); }
+};
