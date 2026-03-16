@@ -2,8 +2,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuthStore } from '@/lib/store';
-import api from '@/lib/axios';
+import { useAuthStore } from '@/lib/store/auth.store';
+import api from '@/lib/api';
 import { ArrowLeft } from 'lucide-react';
 
 export default function NewCoursePage() {
