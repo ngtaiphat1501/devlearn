@@ -27,7 +27,6 @@ export const getCourses = async (req: AuthRequest, res: Response, next: NextFunc
       prisma.course.count({ where }),
     ]);
 
-    // Attach ownership info if logged in
     let ownedIds: string[] = [];
     if (req.user) {
       const enrollments = await prisma.enrollment.findMany({
@@ -109,5 +108,43 @@ export const markLessonComplete = async (req: AuthRequest, res: Response, next: 
     });
 
     res.json(progress);
+  } catch (err) { next(err); }
+};
+
+export const createCourse = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { title, shortDesc, description, price, oldPrice, level, tags, thumbnail, slug, categoryId } = req.body;
+    const course = await prisma.course.create({
+      data: {
+        title, shortDesc, description,
+        price: Number(price), oldPrice: Number(oldPrice || 0),
+        level, tags: tags || [], thumbnail: thumbnail || '',
+        slug: slug || title.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now(),
+        instructorId: req.user!.id,
+        categoryId: categoryId || '',
+        isPublished: false,
+      },
+    });
+    res.json({ course });
+  } catch (err) { next(err); }
+};
+
+export const updateCourse = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { title, shortDesc, description, price, oldPrice, level, tags, thumbnail, isPublished } = req.body;
+    const course = await prisma.course.update({
+      where: { id },
+      data: { title, shortDesc, description, price: Number(price), oldPrice: Number(oldPrice || 0), level, tags, thumbnail, isPublished },
+    });
+    res.json({ course });
+  } catch (err) { next(err); }
+};
+
+export const deleteCourse = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    await prisma.course.delete({ where: { id } });
+    res.json({ message: 'Đã xóa khóa học' });
   } catch (err) { next(err); }
 };
