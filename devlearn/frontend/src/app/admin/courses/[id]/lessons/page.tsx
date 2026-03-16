@@ -1,277 +1,302 @@
 'use client';
-import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Navbar } from '@/components/layout/Navbar';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '@/lib/api';
-import toast from 'react-hot-toast';
-import { Plus, Trash2, GripVertical, ChevronDown, ChevronRight, PlayCircle, Youtube } from 'lucide-react';
+import { useAuthStore } from '@/lib/store';
+import api from '@/lib/axios';
+import { ChevronDown, ChevronRight, Plus, Trash2, GripVertical, Video, FileText, Save, ArrowLeft } from 'lucide-react';
 
-export default function ManageLessonsPage() {
-  const { id } = useParams<{ id: string }>();
-  const qc = useQueryClient();
-  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+interface Lesson {
+  id: string;
+  title: string;
+  videoUrl: string | null;
+  duration: number;
+  position: number;
+  isFree: boolean;
+  content: string | null;
+}
+
+interface Section {
+  id: string;
+  title: string;
+  position: number;
+  lessons: Lesson[];
+}
+
+interface Course {
+  id: string;
+  title: string;
+  sections: Section[];
+}
+
+export default function AdminCourseLessonsPage() {
+  const params = useParams();
+  const router = useRouter();
+  const { user } = useAuthStore();
+  const courseId = params.id as string;
+
+  const [course, setCourse] = useState<Course | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [addingLesson, setAddingLesson] = useState<string | null>(null);
   const [addingSection, setAddingSection] = useState(false);
   const [newSectionTitle, setNewSectionTitle] = useState('');
-  const [addingLesson, setAddingLesson] = useState<string | null>(null);
-  const [newLesson, setNewLesson] = useState({ title: '', videoUrl: '', duration: 10, isFree: false });
+  const [newLesson, setNewLesson] = useState({ title: '', videoUrl: '', duration: 10, isFree: false, content: '' });
+  const [saving, setSaving] = useState(false);
+  const [editingLesson, setEditingLesson] = useState<string | null>(null);
+  const [editLessonData, setEditLessonData] = useState<Partial<Lesson>>({});
 
-  const { data: course, isLoading } = useQuery({
-    queryKey: ['admin-course', id],
-    queryFn: async () => {
-      const { data } = await api.get(`/admin/courses/${id}`);
-      return data;
-    },
-  });
+  useEffect(() => {
+    if (!user || user.role !== 'ADMIN') { router.push('/'); return; }
+    fetchCourse();
+  }, [courseId]);
 
-  const addSection = useMutation({
-    mutationFn: (title: string) => api.post(`/admin/courses/${id}/sections`, { title }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-course', id] });
-      setAddingSection(false);
-      setNewSectionTitle('');
-      toast.success('✓ Thêm chương thành công');
-    },
-    onError: () => toast.error('Lỗi thêm chương'),
-  });
-
-  const deleteSection = useMutation({
-    mutationFn: (sectionId: string) => api.delete(`/admin/sections/${sectionId}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-course', id] });
-      toast.success('✓ Đã xóa chương');
-    },
-  });
-
-  const addLesson = useMutation({
-    mutationFn: ({ sectionId, data }: { sectionId: string; data: any }) =>
-      api.post(`/admin/sections/${sectionId}/lessons`, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-course', id] });
-      setAddingLesson(null);
-      setNewLesson({ title: '', videoUrl: '', duration: 10, isFree: false });
-      toast.success('✓ Thêm bài học thành công');
-    },
-    onError: () => toast.error('Lỗi thêm bài học'),
-  });
-
-  const deleteLesson = useMutation({
-    mutationFn: (lessonId: string) => api.delete(`/admin/lessons/${lessonId}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-course', id] });
-      toast.success('✓ Đã xóa bài học');
-    },
-  });
-
-  const toggleSection = (sid: string) => {
-    setOpenSections((prev) => {
-      const next = new Set(Array.from(prev));
-      if (next.has(sid)) {
-        next.delete(sid);
-      } else {
-        next.add(sid);
+  const fetchCourse = async () => {
+    try {
+      const res = await api.get(`/courses/${courseId}/manage`);
+      setCourse(res.data.course);
+      const open: Record<string, boolean> = {};
+      res.data.course.sections?.forEach((s: Section) => { open[s.id] = true; });
+      setOpenSections(open);
+    } catch {
+      try {
+        const res = await api.get(`/courses/${courseId}`);
+        setCourse(res.data.course);
+      } catch (err) {
+        console.error(err);
       }
-      return next;
-    });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const openSection = (sid: string) => {
-    setOpenSections((prev) => {
-      const next = new Set(Array.from(prev));
-      next.add(sid);
-      return next;
-    });
+  const toggleSection = (id: string) => {
+    setOpenSections(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const getYoutubeId = (url: string) => {
-    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
-    return match ? match[1] : null;
+  const openSection = (id: string) => {
+    setOpenSections(prev => ({ ...prev, [id]: true }));
   };
 
-  if (isLoading) {
-    return (
-      <>
-        <Navbar />
-        <div className="max-w-3xl mx-auto px-6 py-12">
-          <div className="h-64 bg-card rounded-[14px] animate-pulse" />
-        </div>
-      </>
-    );
-  }
+  const addSection = async () => {
+    if (!newSectionTitle.trim()) return;
+    setSaving(true);
+    try {
+      const res = await api.post(`/courses/${courseId}/sections`, {
+        title: newSectionTitle,
+        position: (course?.sections?.length || 0) + 1,
+      });
+      setCourse(prev => prev ? {
+        ...prev,
+        sections: [...(prev.sections || []), { ...res.data.section, lessons: [] }]
+      } : prev);
+      setNewSectionTitle('');
+      setAddingSection(false);
+      openSection(res.data.section.id);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteSection = async (sectionId: string) => {
+    if (!confirm('Xóa chương này và tất cả bài học bên trong?')) return;
+    try {
+      await api.delete(`/courses/${courseId}/sections/${sectionId}`);
+      setCourse(prev => prev ? {
+        ...prev,
+        sections: prev.sections.filter(s => s.id !== sectionId)
+      } : prev);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const addLesson = async (sectionId: string) => {
+    if (!newLesson.title.trim()) return;
+    setSaving(true);
+    try {
+      const section = course?.sections.find(s => s.id === sectionId);
+      const res = await api.post(`/courses/${courseId}/sections/${sectionId}/lessons`, {
+        ...newLesson,
+        position: (section?.lessons?.length || 0) + 1,
+      });
+      setCourse(prev => prev ? {
+        ...prev,
+        sections: prev.sections.map(s =>
+          s.id === sectionId ? { ...s, lessons: [...(s.lessons || []), res.data.lesson] } : s
+        )
+      } : prev);
+      setNewLesson({ title: '', videoUrl: '', duration: 10, isFree: false, content: '' });
+      setAddingLesson(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteLesson = async (sectionId: string, lessonId: string) => {
+    if (!confirm('Xóa bài học này?')) return;
+    try {
+      await api.delete(`/courses/${courseId}/sections/${sectionId}/lessons/${lessonId}`);
+      setCourse(prev => prev ? {
+        ...prev,
+        sections: prev.sections.map(s =>
+          s.id === sectionId ? { ...s, lessons: s.lessons.filter(l => l.id !== lessonId) } : s
+        )
+      } : prev);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const saveLesson = async (sectionId: string, lessonId: string) => {
+    setSaving(true);
+    try {
+      await api.patch(`/courses/${courseId}/sections/${sectionId}/lessons/${lessonId}`, editLessonData);
+      setCourse(prev => prev ? {
+        ...prev,
+        sections: prev.sections.map(s =>
+          s.id === sectionId ? {
+            ...s,
+            lessons: s.lessons.map(l => l.id === lessonId ? { ...l, ...editLessonData } : l)
+          } : s
+        )
+      } : prev);
+      setEditingLesson(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-acc border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
 
   return (
-    <>
-      <Navbar />
-      <div className="max-w-3xl mx-auto px-6 py-8">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-[13px] text-[#64748b] mb-6 flex-wrap">
-          <Link href="/admin/courses" className="hover:text-[#e2e8f0]">Khóa học</Link>
-          <ChevronRight size={13} />
-          <span className="text-[#e2e8f0] truncate max-w-[200px]">{course?.title}</span>
-          <ChevronRight size={13} />
-          <span className="text-acc">Bài học</span>
-        </div>
-
-        <div className="flex items-center justify-between mb-5">
-          <h1 className="text-[20px] font-bold">Nội dung khóa học</h1>
-          <div className="flex gap-2">
-            <Link href={`/admin/courses/${id}/quiz`} className="btn-secondary text-[12px] py-2 px-3">
-              📝 Quiz
-            </Link>
-            <Link href={`/admin/courses/${id}/edit`} className="btn-secondary text-[12px] py-2 px-3">
-              ✏️ Sửa info
-            </Link>
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Header */}
+      <div className="border-b border-border2 bg-card px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link href="/admin/courses" className="text-[#94a3b8] hover:text-foreground transition-colors">
+            <ArrowLeft size={18} />
+          </Link>
+          <div>
+            <p className="text-[11px] text-[#64748b] uppercase tracking-wider">Quản lý bài học</p>
+            <h1 className="text-[16px] font-semibold">{course?.title}</h1>
           </div>
         </div>
+        <div className="flex items-center gap-2">
+          <Link href={`/admin/courses/${courseId}/quiz`}
+            className="px-3 py-1.5 text-[12px] border border-border2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors">
+            Quản lý Quiz
+          </Link>
+          <Link href={`/admin/courses/${courseId}/edit`}
+            className="px-3 py-1.5 text-[12px] border border-border2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors">
+            Sửa thông tin
+          </Link>
+        </div>
+      </div>
 
-        {/* Sections list */}
-        <div className="space-y-3 mb-4">
-          {course?.sections?.map((sec: any, si: number) => (
-            <div key={sec.id} className="bg-card border border-border rounded-[12px] overflow-hidden">
-              {/* Section header */}
-              <div
-                className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-[#1e1e2e] transition-colors"
-                onClick={() => toggleSection(sec.id)}
-              >
-                <GripVertical size={14} className="text-[#64748b]" />
-                <span className="font-mono text-[11px] text-acc bg-[rgba(0,212,255,0.08)] px-2 py-0.5 rounded">
-                  Chương {si + 1}
-                </span>
-                <span className="flex-1 font-semibold text-[14px]">{sec.title}</span>
-                <span className="text-[11px] text-[#64748b]">{sec.lessons?.length || 0} bài</span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (confirm('Xóa chương này và toàn bộ bài học bên trong?')) {
-                      deleteSection.mutate(sec.id);
-                    }
-                  }}
-                  className="p-1.5 text-red-400 hover:bg-[rgba(239,68,68,0.1)] rounded transition-colors"
-                >
+      <div className="max-w-3xl mx-auto px-6 py-8">
+        {/* Sections */}
+        <div className="space-y-3">
+          {(course?.sections || []).map((sec, si) => (
+            <div key={sec.id} className="border border-border2 rounded-xl overflow-hidden bg-card">
+              {/* Section Header */}
+              <div className="flex items-center gap-3 px-4 py-3 bg-[rgba(255,255,255,0.03)]">
+                <GripVertical size={14} className="text-[#475569] cursor-grab" />
+                <button onClick={() => toggleSection(sec.id)} className="flex items-center gap-2 flex-1 text-left">
+                  {openSections[sec.id] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  <span className="text-[13px] font-medium">Chương {si + 1}: {sec.title}</span>
+                  <span className="text-[11px] text-[#64748b] ml-auto">{sec.lessons?.length || 0} bài</span>
+                </button>
+                <button onClick={() => deleteSection(sec.id)} className="text-[#ef4444] hover:text-red-400 p-1 transition-colors">
                   <Trash2 size={13} />
                 </button>
-                {openSections.has(sec.id)
-                  ? <ChevronDown size={14} className="text-[#64748b]" />
-                  : <ChevronRight size={14} className="text-[#64748b]" />
-                }
               </div>
 
               {/* Lessons */}
-              {openSections.has(sec.id) && (
-                <div className="border-t border-border">
-                  {sec.lessons?.map((lesson: any, li: number) => (
-                    <div
-                      key={lesson.id}
-                      className="flex items-center gap-3 px-4 py-3 border-b border-border hover:bg-[rgba(255,255,255,0.015)] text-[13px]"
-                    >
-                      <GripVertical size={13} className="text-[#64748b]" />
-                      <PlayCircle size={14} className="text-[#64748b] shrink-0" />
-                      <span className="flex-1">{li + 1}. {lesson.title}</span>
-                      {lesson.isFree && (
-                        <span className="badge badge-green text-[10px]">Free</span>
+              {openSections[sec.id] && (
+                <div className="divide-y divide-border2">
+                  {(sec.lessons || []).map((lesson, li) => (
+                    <div key={lesson.id} className="px-4 py-3">
+                      {editingLesson === lesson.id ? (
+                        <div className="space-y-2">
+                          <input value={editLessonData.title || ''} onChange={e => setEditLessonData(p => ({ ...p, title: e.target.value }))}
+                            className="w-full bg-background border border-border2 rounded-lg px-3 py-2 text-[13px]" placeholder="Tên bài học" />
+                          <input value={editLessonData.videoUrl || ''} onChange={e => setEditLessonData(p => ({ ...p, videoUrl: e.target.value }))}
+                            className="w-full bg-background border border-border2 rounded-lg px-3 py-2 text-[13px]" placeholder="Link video YouTube/Cloudinary" />
+                          <div className="flex items-center gap-3">
+                            <input type="number" value={editLessonData.duration || 0} onChange={e => setEditLessonData(p => ({ ...p, duration: Number(e.target.value) }))}
+                              className="w-24 bg-background border border-border2 rounded-lg px-3 py-2 text-[13px]" placeholder="Phút" />
+                            <label className="flex items-center gap-2 text-[12px] text-[#94a3b8]">
+                              <input type="checkbox" checked={editLessonData.isFree || false} onChange={e => setEditLessonData(p => ({ ...p, isFree: e.target.checked }))} />
+                              Miễn phí xem thử
+                            </label>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => saveLesson(sec.id, lesson.id)} disabled={saving}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-acc text-black text-[12px] font-medium rounded-lg disabled:opacity-50">
+                              <Save size={12} /> Lưu
+                            </button>
+                            <button onClick={() => setEditingLesson(null)} className="px-3 py-1.5 border border-border2 text-[12px] rounded-lg">
+                              Hủy
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <GripVertical size={12} className="text-[#475569] cursor-grab" />
+                          {lesson.videoUrl ? <Video size={13} className="text-acc shrink-0" /> : <FileText size={13} className="text-[#64748b] shrink-0" />}
+                          <span className="text-[13px] flex-1">{li + 1}. {lesson.title}</span>
+                          {lesson.isFree && <span className="text-[10px] bg-[rgba(0,212,255,0.1)] text-acc px-2 py-0.5 rounded-full">Free</span>}
+                          <span className="text-[11px] text-[#64748b]">{lesson.duration}p</span>
+                          <button onClick={() => { setEditingLesson(lesson.id); setEditLessonData(lesson); }}
+                            className="text-[11px] text-[#94a3b8] hover:text-foreground px-2 py-1 transition-colors">Sửa</button>
+                          <button onClick={() => deleteLesson(sec.id, lesson.id)} className="text-[#ef4444] hover:text-red-400 p-1 transition-colors">
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
                       )}
-                      {lesson.videoUrl && (
-                        <span title={lesson.videoUrl}>
-                          {lesson.videoUrl.includes('youtube') || lesson.videoUrl.includes('youtu.be')
-                            ? <Youtube size={13} className="text-red-400" />
-                            : <PlayCircle size={13} className="text-acc" />
-                          }
-                        </span>
-                      )}
-                      <span className="font-mono text-[11px] text-[#64748b]">{lesson.duration}m</span>
-                      <button
-                        onClick={() => {
-                          if (confirm('Xóa bài học này?')) deleteLesson.mutate(lesson.id);
-                        }}
-                        className="p-1 text-red-400 hover:bg-[rgba(239,68,68,0.1)] rounded transition-colors"
-                      >
-                        <Trash2 size={12} />
-                      </button>
                     </div>
                   ))}
 
-                  {/* Add lesson form */}
+                  {/* Add Lesson Form */}
                   {addingLesson === sec.id ? (
-                    <div className="p-4 bg-[rgba(0,212,255,0.03)] space-y-3">
-                      <div>
-                        <label className="label">Tên bài học *</label>
-                        <input
-                          value={newLesson.title}
-                          onChange={(e) => setNewLesson((p) => ({ ...p, title: e.target.value }))}
-                          placeholder="VD: Giới thiệu về Python"
-                          className="input text-[13px]"
-                        />
-                      </div>
-                      <div>
-                        <label className="label">Link video (YouTube hoặc Cloudinary)</label>
-                        <input
-                          value={newLesson.videoUrl}
-                          onChange={(e) => setNewLesson((p) => ({ ...p, videoUrl: e.target.value }))}
-                          placeholder="https://youtube.com/watch?v=... hoặc https://res.cloudinary.com/..."
-                          className="input text-[13px] font-mono"
-                        />
-                        {newLesson.videoUrl && getYoutubeId(newLesson.videoUrl) && (
-                          <div className="mt-2 rounded-[8px] overflow-hidden aspect-video">
-                            <iframe
-                              src={`https://www.youtube.com/embed/${getYoutubeId(newLesson.videoUrl)}`}
-                              className="w-full h-full"
-                              allowFullScreen
-                            />
-                          </div>
-                        )}
-                        <p className="text-[11px] text-[#64748b] mt-1">Để trống nếu chưa có video</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="label">Thời lượng (phút)</label>
-                          <input
-                            type="number"
-                            value={newLesson.duration}
-                            onChange={(e) => setNewLesson((p) => ({ ...p, duration: Number(e.target.value) }))}
-                            className="input text-[13px]"
-                            min="1"
-                          />
+                    <div className="px-4 py-3 bg-[rgba(0,212,255,0.02)] space-y-2">
+                      <input value={newLesson.title} onChange={e => setNewLesson(p => ({ ...p, title: e.target.value }))}
+                        className="w-full bg-background border border-border2 rounded-lg px-3 py-2 text-[13px]" placeholder="Tên bài học *" autoFocus />
+                      <input value={newLesson.videoUrl} onChange={e => setNewLesson(p => ({ ...p, videoUrl: e.target.value }))}
+                        className="w-full bg-background border border-border2 rounded-lg px-3 py-2 text-[13px]" placeholder="Link video YouTube (https://youtube.com/watch?v=...)" />
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <input type="number" value={newLesson.duration} onChange={e => setNewLesson(p => ({ ...p, duration: Number(e.target.value) }))}
+                            className="w-20 bg-background border border-border2 rounded-lg px-3 py-2 text-[13px]" min={1} />
+                          <span className="text-[12px] text-[#64748b]">phút</span>
                         </div>
-                        <div className="flex items-end pb-1">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={newLesson.isFree}
-                              onChange={(e) => setNewLesson((p) => ({ ...p, isFree: e.target.checked }))}
-                              className="w-4 h-4 accent-[#00d4ff]"
-                            />
-                            <span className="text-[13px]">Miễn phí (xem thử)</span>
-                          </label>
-                        </div>
+                        <label className="flex items-center gap-2 text-[12px] text-[#94a3b8]">
+                          <input type="checkbox" checked={newLesson.isFree} onChange={e => setNewLesson(p => ({ ...p, isFree: e.target.checked }))} />
+                          Xem thử miễn phí
+                        </label>
                       </div>
                       <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            if (!newLesson.title.trim()) { toast.error('Nhập tên bài học!'); return; }
-                            addLesson.mutate({ sectionId: sec.id, data: newLesson });
-                          }}
-                          disabled={addLesson.isPending}
-                          className="btn-primary text-[12px] py-2 px-4"
-                        >
-                          {addLesson.isPending ? 'Đang thêm...' : '+ Thêm bài học'}
+                        <button onClick={() => addLesson(sec.id)} disabled={saving || !newLesson.title.trim()}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-acc text-black text-[12px] font-medium rounded-lg disabled:opacity-50">
+                          <Plus size={12} /> Thêm bài
                         </button>
-                        <button
-                          onClick={() => setAddingLesson(null)}
-                          className="btn-secondary text-[12px] py-2 px-4"
-                        >
-                          Huỷ
-                        </button>
+                        <button onClick={() => setAddingLesson(null)} className="px-3 py-1.5 border border-border2 text-[12px] rounded-lg">Hủy</button>
                       </div>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => {
-                        setAddingLesson(sec.id);
-                        openSection(sec.id);
-                      }}
-                      className="w-full flex items-center gap-2 px-4 py-3 text-[13px] text-acc hover:bg-[rgba(0,212,255,0.04)] transition-colors"
-                    >
+                    <button onClick={() => { setAddingLesson(sec.id); openSection(sec.id); }}
+                      className="w-full flex items-center gap-2 px-4 py-3 text-[13px] text-acc hover:bg-[rgba(0,212,255,0.04)] transition-colors">
                       <Plus size={13} /> Thêm bài học
                     </button>
                   )}
@@ -281,54 +306,31 @@ export default function ManageLessonsPage() {
           ))}
         </div>
 
-        {/* Add section */}
-        {addingSection ? (
-          <div className="bg-card border border-border2 rounded-[12px] p-4">
-            <label className="label">Tên chương mới *</label>
-            <input
-              value={newSectionTitle}
-              onChange={(e) => setNewSectionTitle(e.target.value)}
-              placeholder="VD: Chương 1 — Bắt đầu với Python"
-              className="input mb-3"
-              onKeyDown={(e) => e.key === 'Enter' && addSection.mutate(newSectionTitle)}
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  if (!newSectionTitle.trim()) { toast.error('Nhập tên chương!'); return; }
-                  addSection.mutate(newSectionTitle);
-                }}
-                disabled={addSection.isPending}
-                className="btn-primary text-[13px] py-2 px-4"
-              >
-                {addSection.isPending ? 'Đang thêm...' : '+ Thêm chương'}
-              </button>
-              <button
-                onClick={() => { setAddingSection(false); setNewSectionTitle(''); }}
-                className="btn-secondary text-[13px] py-2 px-4"
-              >
-                Huỷ
-              </button>
+        {/* Add Section */}
+        <div className="mt-4">
+          {addingSection ? (
+            <div className="border border-border2 rounded-xl p-4 bg-card space-y-3">
+              <input value={newSectionTitle} onChange={e => setNewSectionTitle(e.target.value)}
+                className="w-full bg-background border border-border2 rounded-lg px-3 py-2 text-[13px]"
+                placeholder="Tên chương mới *" autoFocus
+                onKeyDown={e => e.key === 'Enter' && addSection()} />
+              <div className="flex gap-2">
+                <button onClick={addSection} disabled={saving || !newSectionTitle.trim()}
+                  className="flex items-center gap-1 px-4 py-2 bg-acc text-black text-[13px] font-medium rounded-lg disabled:opacity-50">
+                  <Plus size={13} /> Thêm chương
+                </button>
+                <button onClick={() => { setAddingSection(false); setNewSectionTitle(''); }}
+                  className="px-4 py-2 border border-border2 text-[13px] rounded-lg">Hủy</button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => setAddingSection(true)}
-            className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-border2 rounded-[12px] text-[13px] text-[#64748b] hover:border-acc hover:text-acc transition-all"
-          >
-            <Plus size={15} /> Thêm chương mới
-          </button>
-        )}
-
-        <div className="mt-6 flex gap-3">
-          <Link href={`/admin/courses/${id}/quiz`} className="btn-primary flex-1 text-center py-3">
-            Tiếp theo: Thêm Quiz →
-          </Link>
-          <Link href="/admin/courses" className="btn-secondary px-6 py-3">
-            Xong
-          </Link>
+          ) : (
+            <button onClick={() => setAddingSection(true)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-dashed border-border2 rounded-xl text-[13px] text-[#64748b] hover:text-acc hover:border-acc transition-colors">
+              <Plus size={14} /> Thêm chương mới
+            </button>
+          )}
         </div>
       </div>
-    </>
+    </div>
   );
 }

@@ -1,178 +1,273 @@
-// src/app/admin/courses/[id]/quiz/page.tsx
 'use client';
-import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Navbar } from '@/components/layout/Navbar';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '@/lib/api';
-import toast from 'react-hot-toast';
-import { Plus, Trash2, ChevronRight } from 'lucide-react';
+import { useAuthStore } from '@/lib/store';
+import api from '@/lib/axios';
+import { ArrowLeft, Plus, Trash2, Save } from 'lucide-react';
 
-const EMPTY_Q = { question: '', codeSnippet: '', options: ['', '', '', ''], answer: 0 };
+interface QuizQuestion {
+  id: string;
+  question: string;
+  codeSnippet: string | null;
+  options: string[];
+  answer: number;
+  position: number;
+}
 
-export default function ManageQuizPage() {
-  const { id } = useParams<{ id: string }>();
-  const qc = useQueryClient();
+interface Quiz {
+  id: string;
+  title: string;
+  passingScore: number;
+  questions: QuizQuestion[];
+}
+
+const emptyQuestion = () => ({
+  question: '',
+  codeSnippet: '',
+  options: ['', '', '', ''],
+  answer: 0,
+  position: 0,
+});
+
+export default function AdminQuizPage() {
+  const params = useParams();
+  const router = useRouter();
+  const { user } = useAuthStore();
+  const courseId = params.id as string;
+
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ ...EMPTY_Q, options: ['', '', '', ''] });
-  const [editId, setEditId] = useState<string | null>(null);
+  const [newQ, setNewQ] = useState(emptyQuestion());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editData, setEditData] = useState<Partial<QuizQuestion>>({});
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['admin-quiz', id],
-    queryFn: async () => { const { data } = await api.get(`/admin/courses/${id}/quiz`); return data; },
-  });
+  useEffect(() => {
+    if (!user || user.role !== 'ADMIN') { router.push('/'); return; }
+    fetchQuiz();
+  }, [courseId]);
 
-  const saveQuestion = useMutation({
-    mutationFn: (payload: any) => editId
-      ? api.patch(`/admin/quiz-questions/${editId}`, payload)
-      : api.post(`/admin/courses/${id}/quiz/questions`, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-quiz', id] });
-      setAdding(false); setEditId(null);
-      setForm({ ...EMPTY_Q, options: ['', '', '', ''] });
-      toast.success(editId ? '✓ Đã cập nhật câu hỏi' : '✓ Thêm câu hỏi thành công');
-    },
-    onError: () => toast.error('Lỗi lưu câu hỏi'),
-  });
-
-  const deleteQuestion = useMutation({
-    mutationFn: (qId: string) => api.delete(`/admin/quiz-questions/${qId}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-quiz', id] }); toast.success('✓ Đã xóa'); },
-  });
-
-  const handleSubmit = () => {
-    if (!form.question.trim()) { toast.error('Nhập câu hỏi!'); return; }
-    if (form.options.some(o => !o.trim())) { toast.error('Điền đủ 4 đáp án!'); return; }
-    saveQuestion.mutate({
-      question: form.question,
-      codeSnippet: form.codeSnippet || null,
-      options: form.options,
-      answer: form.answer,
-      position: (data?.questions?.length || 0) + 1,
-    });
+  const fetchQuiz = async () => {
+    try {
+      const res = await api.get(`/courses/${courseId}/quiz`);
+      setQuiz(res.data.quiz);
+    } catch {
+      setQuiz(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const startEdit = (q: any) => {
-    setForm({ question: q.question, codeSnippet: q.codeSnippet || '', options: [...q.options], answer: q.answer });
-    setEditId(q.id); setAdding(true);
+  const createQuiz = async () => {
+    setSaving(true);
+    try {
+      const res = await api.post(`/courses/${courseId}/quiz`, { title: 'Quiz', passingScore: 75 });
+      setQuiz({ ...res.data.quiz, questions: [] });
+    } catch (err) {
+      console.error(err);
+      setError('Không thể tạo quiz');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const addQuestion = async () => {
+    if (!newQ.question.trim()) { setError('Nhập câu hỏi'); return; }
+    if (newQ.options.some(o => !o.trim())) { setError('Điền đủ 4 đáp án'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const res = await api.post(`/courses/${courseId}/quiz/questions`, {
+        ...newQ,
+        codeSnippet: newQ.codeSnippet || null,
+        position: (quiz?.questions?.length || 0) + 1,
+      });
+      setQuiz(prev => prev ? { ...prev, questions: [...prev.questions, res.data.question] } : prev);
+      setNewQ(emptyQuestion());
+      setAdding(false);
+      setSuccess('Đã thêm câu hỏi!');
+      setTimeout(() => setSuccess(''), 2000);
+    } catch (err) {
+      console.error(err);
+      setError('Lỗi thêm câu hỏi');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteQuestion = async (qId: string) => {
+    if (!confirm('Xóa câu hỏi này?')) return;
+    try {
+      await api.delete(`/courses/${courseId}/quiz/questions/${qId}`);
+      setQuiz(prev => prev ? { ...prev, questions: prev.questions.filter(q => q.id !== qId) } : prev);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const saveQuestion = async (qId: string) => {
+    setSaving(true);
+    try {
+      await api.patch(`/courses/${courseId}/quiz/questions/${qId}`, editData);
+      setQuiz(prev => prev ? {
+        ...prev,
+        questions: prev.questions.map(q => q.id === qId ? { ...q, ...editData } as QuizQuestion : q)
+      } : prev);
+      setEditingId(null);
+      setSuccess('Đã lưu!');
+      setTimeout(() => setSuccess(''), 2000);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-acc border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
 
   return (
-    <>
-      <Navbar />
-      <div className="max-w-2xl mx-auto px-6 py-8">
-        <div className="flex items-center gap-2 text-[13px] text-[#64748b] mb-6 flex-wrap">
-          <Link href="/admin/courses" className="hover:text-[#e2e8f0]">Khóa học</Link>
-          <ChevronRight size={13} />
-          <span className="truncate max-w-[180px] text-[#e2e8f0]">{data?.courseTitle || '...'}</span>
-          <ChevronRight size={13} />
-          <span className="text-acc">Quiz</span>
-        </div>
-
-        <div className="flex items-center justify-between mb-5">
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="border-b border-border2 bg-card px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link href="/admin/courses" className="text-[#94a3b8] hover:text-foreground transition-colors">
+            <ArrowLeft size={18} />
+          </Link>
           <div>
-            <h1 className="text-[20px] font-bold">Quản lý Quiz</h1>
-            <p className="text-[12px] text-[#64748b] mt-1">{data?.questions?.length || 0} câu hỏi · Đạt khi ≥75%</p>
+            <p className="text-[11px] text-[#64748b] uppercase tracking-wider">Quản lý Quiz</p>
+            <h1 className="text-[16px] font-semibold">{quiz?.title || 'Chưa có quiz'}</h1>
           </div>
-          <Link href={`/admin/courses/${id}/lessons`} className="btn-secondary text-[12px] py-2 px-3">← Bài học</Link>
         </div>
+        <Link href={`/admin/courses/${courseId}/lessons`}
+          className="px-3 py-1.5 text-[12px] border border-border2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors">
+          Bài học
+        </Link>
+      </div>
 
-        {/* Questions list */}
-        {isLoading ? (
-          <div className="space-y-3">{Array.from({length:3}).map((_,i)=><div key={i} className="h-16 bg-card rounded-[10px] animate-pulse"/>)}</div>
+      <div className="max-w-2xl mx-auto px-6 py-8">
+        {error && <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-[13px] mb-4">{error}</div>}
+        {success && <div className="bg-green-500/10 border border-green-500/30 text-green-400 px-4 py-3 rounded-xl text-[13px] mb-4">{success}</div>}
+
+        {!quiz ? (
+          <div className="text-center py-16">
+            <p className="text-[#64748b] mb-4">Khóa học này chưa có quiz</p>
+            <button onClick={createQuiz} disabled={saving}
+              className="px-6 py-2.5 bg-acc text-black text-[13px] font-medium rounded-xl disabled:opacity-50">
+              {saving ? 'Đang tạo...' : '+ Tạo Quiz'}
+            </button>
+          </div>
         ) : (
-          <div className="space-y-3 mb-5">
-            {data?.questions?.map((q: any, i: number) => (
-              <div key={q.id} className="bg-card border border-border rounded-[10px] p-4">
-                <div className="flex items-start gap-3">
-                  <span className="font-mono text-[11px] text-acc bg-[rgba(0,212,255,0.08)] px-2 py-1 rounded shrink-0">Q{i+1}</span>
-                  <div className="flex-1">
-                    <p className="text-[13px] font-medium mb-2">{q.question}</p>
-                    {q.codeSnippet && (
-                      <pre className="bg-bg border border-border rounded-[6px] px-3 py-2 font-mono text-[11px] text-acc3 mb-2 overflow-x-auto">{q.codeSnippet}</pre>
-                    )}
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {q.options.map((opt: string, oi: number) => (
-                        <div key={oi} className={`text-[12px] px-2.5 py-1.5 rounded-[6px] ${oi === q.answer ? 'bg-[rgba(6,255,165,0.1)] text-acc3 font-medium' : 'bg-[rgba(255,255,255,0.03)] text-[#94a3b8]'}`}>
-                          {'ABCD'[oi]}. {opt}
+          <div className="space-y-4">
+            {/* Questions */}
+            {quiz.questions.map((q, i) => (
+              <div key={q.id} className="bg-card border border-border2 rounded-xl p-5">
+                {editingId === q.id ? (
+                  <div className="space-y-3">
+                    <textarea value={editData.question || ''} onChange={e => setEditData(p => ({ ...p, question: e.target.value }))}
+                      rows={2} className="w-full bg-background border border-border2 rounded-lg px-3 py-2 text-[13px] resize-none" placeholder="Câu hỏi *" />
+                    <textarea value={editData.codeSnippet || ''} onChange={e => setEditData(p => ({ ...p, codeSnippet: e.target.value }))}
+                      rows={3} className="w-full bg-background border border-border2 rounded-lg px-3 py-2 text-[12px] font-mono resize-none" placeholder="Code snippet (tùy chọn)" />
+                    <div className="space-y-2">
+                      {(editData.options as string[] || []).map((opt, oi) => (
+                        <div key={oi} className="flex items-center gap-2">
+                          <input type="radio" name={`edit-ans-${q.id}`} checked={editData.answer === oi}
+                            onChange={() => setEditData(p => ({ ...p, answer: oi }))} />
+                          <input value={opt} onChange={e => {
+                            const opts = [...(editData.options as string[] || [])];
+                            opts[oi] = e.target.value;
+                            setEditData(p => ({ ...p, options: opts }));
+                          }} className="flex-1 bg-background border border-border2 rounded-lg px-3 py-1.5 text-[12px]"
+                            placeholder={`Đáp án ${oi + 1}`} />
                         </div>
                       ))}
                     </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => saveQuestion(q.id)} disabled={saving}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-acc text-black text-[12px] font-medium rounded-lg">
+                        <Save size={12} /> Lưu
+                      </button>
+                      <button onClick={() => setEditingId(null)} className="px-3 py-1.5 border border-border2 text-[12px] rounded-lg">Hủy</button>
+                    </div>
                   </div>
-                  <div className="flex gap-1.5 shrink-0">
-                    <button onClick={() => startEdit(q)}
-                            className="p-1.5 text-acc hover:bg-[rgba(0,212,255,0.1)] rounded transition-colors text-[11px]">✏️</button>
-                    <button onClick={() => { if(confirm('Xóa câu hỏi này?')) deleteQuestion.mutate(q.id); }}
-                            className="p-1.5 text-red-400 hover:bg-[rgba(239,68,68,0.1)] rounded transition-colors">
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <p className="text-[14px] font-medium">Câu {i + 1}: {q.question}</p>
+                      <div className="flex gap-1 shrink-0">
+                        <button onClick={() => { setEditingId(q.id); setEditData(q); }}
+                          className="text-[11px] text-[#94a3b8] hover:text-foreground px-2 py-1 transition-colors">Sửa</button>
+                        <button onClick={() => deleteQuestion(q.id)} className="text-[#ef4444] hover:text-red-400 p-1">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                    {q.codeSnippet && (
+                      <pre className="bg-background border border-border2 rounded-lg p-3 text-[11px] font-mono mb-3 overflow-x-auto">{q.codeSnippet}</pre>
+                    )}
+                    <div className="space-y-1.5">
+                      {q.options.map((opt, oi) => (
+                        <div key={oi} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] ${oi === q.answer ? 'bg-green-500/10 border border-green-500/30 text-green-400' : 'bg-[rgba(255,255,255,0.02)]'}`}>
+                          <span className="w-5 h-5 rounded-full border border-current flex items-center justify-center text-[10px] shrink-0">
+                            {String.fromCharCode(65 + oi)}
+                          </span>
+                          {opt}
+                          {oi === q.answer && <span className="ml-auto text-[10px]">✓ Đúng</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             ))}
-            {data?.questions?.length === 0 && (
-              <div className="text-center py-10 text-[#64748b] text-[14px]">Chưa có câu hỏi nào. Thêm ngay!</div>
+
+            {/* Add Question */}
+            {adding ? (
+              <div className="bg-card border border-acc/30 rounded-xl p-5 space-y-3">
+                <h3 className="text-[13px] font-medium">Câu hỏi mới</h3>
+                <textarea value={newQ.question} onChange={e => setNewQ(p => ({ ...p, question: e.target.value }))}
+                  rows={2} className="w-full bg-background border border-border2 rounded-lg px-3 py-2 text-[13px] resize-none" placeholder="Câu hỏi *" autoFocus />
+                <textarea value={newQ.codeSnippet} onChange={e => setNewQ(p => ({ ...p, codeSnippet: e.target.value }))}
+                  rows={3} className="w-full bg-background border border-border2 rounded-lg px-3 py-2 text-[12px] font-mono resize-none" placeholder="Code snippet (tùy chọn)" />
+                <div className="space-y-2">
+                  <p className="text-[11px] text-[#64748b]">Chọn đáp án đúng (click radio)</p>
+                  {newQ.options.map((opt, oi) => (
+                    <div key={oi} className="flex items-center gap-2">
+                      <input type="radio" name="new-ans" checked={newQ.answer === oi}
+                        onChange={() => setNewQ(p => ({ ...p, answer: oi }))} />
+                      <input value={opt} onChange={e => {
+                        const opts = [...newQ.options];
+                        opts[oi] = e.target.value;
+                        setNewQ(p => ({ ...p, options: opts }));
+                      }} className="flex-1 bg-background border border-border2 rounded-lg px-3 py-1.5 text-[12px]"
+                        placeholder={`Đáp án ${String.fromCharCode(65 + oi)}`} />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={addQuestion} disabled={saving}
+                    className="flex items-center gap-1 px-4 py-2 bg-acc text-black text-[13px] font-medium rounded-lg disabled:opacity-50">
+                    <Plus size={13} /> Thêm câu hỏi
+                  </button>
+                  <button onClick={() => { setAdding(false); setNewQ(emptyQuestion()); setError(''); }}
+                    className="px-4 py-2 border border-border2 text-[13px] rounded-lg">Hủy</button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setAdding(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-dashed border-border2 rounded-xl text-[13px] text-[#64748b] hover:text-acc hover:border-acc transition-colors">
+                <Plus size={14} /> Thêm câu hỏi mới
+              </button>
             )}
           </div>
         )}
-
-        {/* Add/Edit form */}
-        {adding ? (
-          <div className="bg-card border border-border2 rounded-[12px] p-5 space-y-4">
-            <h3 className="font-semibold text-[14px]">{editId ? 'Sửa câu hỏi' : 'Thêm câu hỏi mới'}</h3>
-
-            <div>
-              <label className="label">Câu hỏi *</label>
-              <textarea value={form.question} onChange={e => setForm(p => ({...p, question: e.target.value}))}
-                        rows={2} placeholder="VD: Python dùng từ khóa gì để định nghĩa hàm?"
-                        className="input resize-none" />
-            </div>
-
-            <div>
-              <label className="label">Code snippet (tuỳ chọn)</label>
-              <textarea value={form.codeSnippet} onChange={e => setForm(p => ({...p, codeSnippet: e.target.value}))}
-                        rows={3} placeholder="def hello():\n    print('Hello World')"
-                        className="input resize-none font-mono text-[12px]" />
-              <p className="text-[11px] text-[#64748b] mt-1">Để trống nếu không có code</p>
-            </div>
-
-            <div>
-              <label className="label">4 đáp án * (chọn đáp án đúng bên cạnh)</label>
-              <div className="space-y-2">
-                {form.options.map((opt, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <button onClick={() => setForm(p => ({...p, answer: i}))}
-                            className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-[12px] font-bold shrink-0 transition-all ${form.answer === i ? 'border-acc3 bg-[rgba(6,255,165,0.15)] text-acc3' : 'border-border2 text-[#64748b] hover:border-acc'}`}>
-                      {'ABCD'[i]}
-                    </button>
-                    <input value={opt} onChange={e => { const opts = [...form.options]; opts[i] = e.target.value; setForm(p => ({...p, options: opts})); }}
-                           placeholder={`Đáp án ${['A','B','C','D'][i]}`} className="input flex-1 text-[13px]" />
-                  </div>
-                ))}
-              </div>
-              <p className="text-[11px] text-[#64748b] mt-2">Bấm vào chữ cái để chọn đáp án đúng (đang chọn: <span className="text-acc3 font-bold">{'ABCD'[form.answer]}</span>)</p>
-            </div>
-
-            <div className="flex gap-2">
-              <button onClick={handleSubmit} disabled={saveQuestion.isPending} className="btn-primary text-[13px] py-2.5 px-5">
-                {saveQuestion.isPending ? 'Đang lưu...' : editId ? '✓ Cập nhật' : '+ Thêm câu hỏi'}
-              </button>
-              <button onClick={() => { setAdding(false); setEditId(null); setForm({...EMPTY_Q, options:['','','','']}); }}
-                      className="btn-secondary text-[13px] py-2.5 px-4">Huỷ</button>
-            </div>
-          </div>
-        ) : (
-          <button onClick={() => setAdding(true)}
-                  className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-border2 rounded-[12px] text-[13px] text-[#64748b] hover:border-acc hover:text-acc transition-all">
-            <Plus size={15} /> Thêm câu hỏi quiz
-          </button>
-        )}
-
-        <div className="mt-6">
-          <Link href="/admin/courses" className="btn-primary w-full text-center py-3 block">✓ Hoàn thành</Link>
-        </div>
       </div>
-    </>
+    </div>
   );
 }
