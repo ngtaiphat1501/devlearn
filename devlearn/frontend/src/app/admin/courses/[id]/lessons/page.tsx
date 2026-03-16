@@ -173,7 +173,7 @@ export default function ManageLessonsPage() {
                       </div>
                     </div>
                   ) : (
-                    <button onClick={() => { setAddingLesson(sec.id); setOpenSections(p => new Set([...p, sec.id])); }}
+                    <button onClick={() => { setAddingLesson(sec.id); setOpenSections(p => { const s = new Set(Array.from(p)); s.add(sec.id); return s; }); }}
                             className="w-full flex items-center gap-2 px-4 py-3 text-[13px] text-acc hover:bg-[rgba(0,212,255,0.04)] transition-colors">
                       <Plus size={13} /> Thêm bài học
                     </button>
