@@ -29,7 +29,6 @@ export default function HomePage() {
     <>
       <Navbar />
       <main>
-        {/* ── HERO ── */}
         <section className="max-w-6xl mx-auto px-6 py-20 grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
           <div>
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-[rgba(0,212,255,0.07)] border border-[rgba(0,212,255,0.2)] rounded-full text-[12px] text-acc font-medium font-mono mb-5">
@@ -47,7 +46,11 @@ export default function HomePage() {
             </p>
             <div className="flex gap-3 flex-wrap">
               <Link href="/courses" className="btn-primary px-6 py-3">Xem khóa học →</Link>
-              <Link href="/auth/register" className="btn-secondary px-6 py-3">Tạo tài khoản miễn phí</Link>
+              {!user ? (
+                <Link href="/auth/register" className="btn-secondary px-6 py-3">Tạo tài khoản miễn phí</Link>
+              ) : (
+                <Link href="/dashboard" className="btn-secondary px-6 py-3">Học của tôi →</Link>
+              )}
             </div>
             <div className="flex gap-7 mt-9 pt-7 border-t border-border">
               {[['8,400+','Học viên'],['24','Khóa học'],['4.9★','Đánh giá'],['92%','Việc làm']].map(([n,l]) => (
@@ -59,7 +62,6 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Code card */}
           <div className="hidden lg:block relative">
             <div className="bg-card border border-border2 rounded-[14px] p-6 font-mono text-[13px] shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
               <div className="flex gap-1.5 mb-4">
@@ -91,7 +93,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ── COURSES ── */}
         <section className="max-w-6xl mx-auto px-6 pb-20">
           <div className="flex items-baseline justify-between mb-3">
             <h2 className="text-[22px] font-bold">
@@ -99,37 +100,26 @@ export default function HomePage() {
             </h2>
             <span className="text-[13px] text-[#94a3b8]">Cập nhật liên tục</span>
           </div>
-
           <div className="flex gap-2 flex-wrap mb-6">
             {FILTERS.map((f) => {
               const val = f === 'Tất cả' ? '' : f;
               return (
-                <button
-                  key={f}
-                  onClick={() => setCat(val)}
+                <button key={f} onClick={() => setCat(val)}
                   className={`px-3.5 py-1.5 rounded-[6px] text-[12px] font-medium border transition-all ${
-                    cat === val
-                      ? 'border-acc bg-[rgba(0,212,255,0.08)] text-acc'
-                      : 'border-border2 text-[#94a3b8] hover:border-acc hover:text-acc'
-                  }`}
-                >
+                    cat === val ? 'border-acc bg-[rgba(0,212,255,0.08)] text-acc' : 'border-border2 text-[#94a3b8] hover:border-acc hover:text-acc'
+                  }`}>
                   {f}
                 </button>
               );
             })}
           </div>
-
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="card h-72 animate-pulse bg-card" />
-              ))}
+              {Array.from({ length: 6 }).map((_, i) => <div key={i} className="card h-72 animate-pulse bg-card" />)}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {data?.data.map((course) => (
-                <CourseCard key={course.id} course={course} onBuy={handleBuy} />
-              ))}
+              {data?.data.map((course) => <CourseCard key={course.id} course={course} onBuy={handleBuy} />)}
             </div>
           )}
         </section>
