@@ -39,5 +39,54 @@ router.post('/courses',              ...isAdmin, createCourse as any);
 router.patch('/courses/:id/toggle',  ...isAdmin, toggleCoursePublish as any);
 router.patch('/courses/:id',         ...isAdmin, updateCourse as any);
 router.delete('/courses/:id',        ...isAdmin, deleteCourse as any);
+// ── Quiz ──────────────────────────────────────────────────
+router.post('/courses/:id/quiz', ...isAdmin, async (req: any, res: any, next: any) => {
+  try {
+    const existing = await prisma.quiz.findFirst({ where: { courseId: req.params.id } });
+    if (existing) return res.json(existing);
+    const quiz = await prisma.quiz.create({ data: { courseId: req.params.id } });
+    res.json(quiz);
+  } catch (err) { next(err); }
+});
 
+router.post('/courses/:id/quiz/questions', ...isAdmin, async (req: any, res: any, next: any) => {
+  try {
+    let quiz = await prisma.quiz.findFirst({ where: { courseId: req.params.id } });
+    if (!quiz) quiz = await prisma.quiz.create({ data: { courseId: req.params.id } });
+    const { question, codeSnippet, options, answer, position } = req.body;
+    const q = await prisma.quizQuestion.create({
+      data: { quizId: quiz.id, question, codeSnippet: codeSnippet || null, options, answer: Number(answer), position: Number(position) || 1 },
+    });
+    res.status(201).json(q);
+  } catch (err) { next(err); }
+});
+
+router.get('/courses/:id/quiz', ...isAdmin, async (req: any, res: any, next: any) => {
+  try {
+    const course = await prisma.course.findUnique({ where: { id: req.params.id }, select: { title: true } });
+    const quiz = await prisma.quiz.findFirst({
+      where: { courseId: req.params.id },
+      include: { questions: { orderBy: { position: 'asc' } } },
+    });
+    res.json({ courseTitle: course?.title, questions: quiz?.questions || [], quizId: quiz?.id });
+  } catch (err) { next(err); }
+});
+
+router.patch('/quiz-questions/:id', ...isAdmin, async (req: any, res: any, next: any) => {
+  try {
+    const { question, codeSnippet, options, answer } = req.body;
+    const q = await prisma.quizQuestion.update({
+      where: { id: req.params.id },
+      data: { question, codeSnippet: codeSnippet || null, options, answer: Number(answer) },
+    });
+    res.json(q);
+  } catch (err) { next(err); }
+});
+
+router.delete('/quiz-questions/:id', ...isAdmin, async (req: any, res: any, next: any) => {
+  try {
+    await prisma.quizQuestion.delete({ where: { id: req.params.id } });
+    res.json({ message: 'Deleted' });
+  } catch (err) { next(err); }
+});
 export default router;
