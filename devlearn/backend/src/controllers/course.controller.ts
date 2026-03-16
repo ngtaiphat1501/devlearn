@@ -148,3 +148,10 @@ export const deleteCourse = async (req: AuthRequest, res: Response, next: NextFu
     res.json({ message: 'Đã xóa khóa học' });
   } catch (err) { next(err); }
 };
+// add funtion new
+export const getCategories = async (_req: any, res: Response, next: NextFunction) => {
+  try {
+    const categories = await prisma.category.findMany({ orderBy: { name: 'asc' } });
+    res.json(categories);
+  } catch (err) { next(err); }
+};
