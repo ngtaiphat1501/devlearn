@@ -11,18 +11,22 @@ export default function NewCoursePage() {
   const { user } = useAuthStore();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [categories, setCategories] = useState<any[]>([]);
   const [form, setForm] = useState({
     title: '', shortDesc: '', description: '',
     price: 499000, oldPrice: 0,
     level: 'BEGINNER', tags: '', thumbnail: '',
+    categoryId: '',
   });
 
   useEffect(() => {
     if (!user || user.role !== 'ADMIN') router.push('/');
+    api.get('/courses/categories').then(r => setCategories(r.data)).catch(() => {});
   }, [user]);
 
   const handleCreate = async () => {
     if (!form.title.trim()) { setError('Tên khóa học không được để trống'); return; }
+    if (!form.categoryId) { setError('Vui lòng chọn danh mục'); return; }
     setSaving(true);
     setError('');
     try {
@@ -63,28 +67,32 @@ export default function NewCoursePage() {
 
         <div className="bg-card border border-border2 rounded-xl p-5 space-y-4">
           <h2 className="text-[13px] font-semibold text-[#94a3b8] uppercase tracking-wider">Thông tin cơ bản</h2>
-
           <div>
             <label className="block text-[12px] text-[#94a3b8] mb-1.5">Tên khóa học *</label>
             <input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
               className="w-full bg-background border border-border2 rounded-lg px-3 py-2 text-[14px] focus:border-acc outline-none transition-colors"
               placeholder="VD: Python cho người mới bắt đầu" autoFocus />
           </div>
-
+          <div>
+            <label className="block text-[12px] text-[#94a3b8] mb-1.5">Danh mục *</label>
+            <select value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))}
+              className="w-full bg-background border border-border2 rounded-lg px-3 py-2 text-[14px] focus:border-acc outline-none transition-colors">
+              <option value="">-- Chọn danh mục --</option>
+              {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
           <div>
             <label className="block text-[12px] text-[#94a3b8] mb-1.5">Mô tả ngắn</label>
             <input value={form.shortDesc} onChange={e => setForm(p => ({ ...p, shortDesc: e.target.value }))}
               className="w-full bg-background border border-border2 rounded-lg px-3 py-2 text-[14px] focus:border-acc outline-none transition-colors"
               placeholder="1-2 câu tóm tắt" />
           </div>
-
           <div>
             <label className="block text-[12px] text-[#94a3b8] mb-1.5">Mô tả chi tiết</label>
             <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
               rows={4} className="w-full bg-background border border-border2 rounded-lg px-3 py-2 text-[14px] focus:border-acc outline-none transition-colors resize-none"
               placeholder="Bạn sẽ học được gì, yêu cầu đầu vào..." />
           </div>
-
           <div>
             <label className="block text-[12px] text-[#94a3b8] mb-1.5">Link ảnh bìa</label>
             <input value={form.thumbnail} onChange={e => setForm(p => ({ ...p, thumbnail: e.target.value }))}
@@ -95,7 +103,6 @@ export default function NewCoursePage() {
 
         <div className="bg-card border border-border2 rounded-xl p-5 space-y-4">
           <h2 className="text-[13px] font-semibold text-[#94a3b8] uppercase tracking-wider">Giá & Cấp độ</h2>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[12px] text-[#94a3b8] mb-1.5">Giá bán (VNĐ)</label>
@@ -108,7 +115,6 @@ export default function NewCoursePage() {
                 className="w-full bg-background border border-border2 rounded-lg px-3 py-2 text-[14px] focus:border-acc outline-none transition-colors" />
             </div>
           </div>
-
           <div>
             <label className="block text-[12px] text-[#94a3b8] mb-1.5">Cấp độ</label>
             <select value={form.level} onChange={e => setForm(p => ({ ...p, level: e.target.value }))}
@@ -118,7 +124,6 @@ export default function NewCoursePage() {
               <option value="ADVANCED">Nâng cao</option>
             </select>
           </div>
-
           <div>
             <label className="block text-[12px] text-[#94a3b8] mb-1.5">Tags (cách nhau bằng dấu phẩy)</label>
             <input value={form.tags} onChange={e => setForm(p => ({ ...p, tags: e.target.value }))}
