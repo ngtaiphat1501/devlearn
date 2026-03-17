@@ -1,7 +1,7 @@
 // src/components/course/CourseCard.tsx
 'use client';
 import Link from 'next/link';
-import Image from 'next/image';
+
 import { Course } from '@/types';
 import { formatPrice, LEVEL_MAP, cn } from '@/lib/utils';
 import { BookOpen, FileQuestion, Users } from 'lucide-react';
@@ -32,11 +32,13 @@ export function CourseCard({ course, onBuy }: Props) {
     <div className="card group hover:-translate-y-1 hover:border-border2 hover:shadow-[0_12px_40px_rgba(0,0,0,0.5)] transition-all duration-200">
       {/* Thumbnail */}
       <div className={cn('h-32 bg-gradient-to-br flex items-center justify-center relative overflow-hidden', grad)}>
+      
         {course.thumbnail ? (
-          <Image src={course.thumbnail} alt={course.title} fill className="object-cover opacity-60" />
-        ) : (
-          <span className="text-5xl relative z-10">{emoji}</span>
-        )}
+            <img src={course.thumbnail} alt={course.title} className="absolute inset-0 w-full h-full object-cover opacity-60" />
+               ) : (
+              <span className="text-5xl relative z-10">{emoji}</span>
+         )}
+
         <span className="absolute top-2.5 left-2.5 bg-black/60 border border-white/10 text-[#94a3b8] font-mono text-[10px] px-2 py-0.5 rounded">
           {course.category?.name}
         </span>
