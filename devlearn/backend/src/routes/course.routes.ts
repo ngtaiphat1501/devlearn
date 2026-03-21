@@ -68,7 +68,51 @@ router.post('/lessons/:lessonId/complete', authenticate as any, async (req: any,
   } catch (err) { next(err); }
 });
 
-// ── Quiz cho học viên ─────────────────────────────────────────────────
+// ── Quiz cho học viên ─────────────
+// ────────────────────────────────────
+
+// ── Quiz admin ────────────────────────────────────────────────────────
+router.post('/:id/quiz', authenticate as any, async (req: any, res: any, next: any) => {
+  try {
+    const existing = await prisma.quiz.findFirst({ where: { courseId: req.params.id } });
+    if (existing) { res.json({ quiz: existing }); return; }
+    const quiz = await prisma.quiz.create({ data: { courseId: req.params.id } });
+    res.json({ quiz });
+  } catch (err) { next(err); }
+});
+
+router.post('/:id/quiz/questions', authenticate as any, async (req: any, res: any, next: any) => {
+  try {
+    const quiz = await prisma.quiz.findFirst({ where: { courseId: req.params.id } });
+    if (!quiz) { res.status(404).json({ message: 'Quiz not found' }); return; }
+    const { question, codeSnippet, options, answer, position } = req.body;
+    const q = await prisma.quizQuestion.create({
+      data: { quizId: quiz.id, question, codeSnippet: codeSnippet || null, options, answer, position: position || 1 },
+    });
+    res.json({ question: q });
+  } catch (err) { next(err); }
+});
+
+router.patch('/:id/quiz/questions/:qId', authenticate as any, async (req: any, res: any, next: any) => {
+  try {
+    const { question, codeSnippet, options, answer } = req.body;
+    const q = await prisma.quizQuestion.update({
+      where: { id: req.params.qId },
+      data: { question, codeSnippet, options, answer },
+    });
+    res.json({ question: q });
+  } catch (err) { next(err); }
+});
+
+router.delete('/:id/quiz/questions/:qId', authenticate as any, async (req: any, res: any, next: any) => {
+  try {
+    await prisma.quizQuestion.delete({ where: { id: req.params.qId } });
+    res.json({ message: 'Đã xóa' });
+  } catch (err) { next(err); }
+});
+
+
+
 router.get('/:id/quiz', authenticate as any, async (req: any, res: any, next: any) => {
   try {
     const quiz = await prisma.quiz.findFirst({
