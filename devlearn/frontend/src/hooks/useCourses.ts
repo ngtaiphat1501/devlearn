@@ -36,7 +36,15 @@ export const useCourse = (slug: string) => {
 export const useMarkLessonComplete = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (lessonId: string) => api.patch(`/courses/lessons/${lessonId}/complete`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['dashboard'] }),
+    // FIX: Backend mount tại /api/courses → /courses/lessons/:id/complete
+    // Trước đây dùng PATCH, route mới dùng POST để nhất quán với REST
+    mutationFn: (lessonId: string) =>
+      api.post(`/courses/lessons/${lessonId}/complete`),
+    onSuccess: (_data, lessonId) => {
+      // Invalidate dashboard để cập nhật progress
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      // Invalidate course detail nếu đang ở trang course
+      qc.invalidateQueries({ queryKey: ['course'] });
+    },
   });
 };
