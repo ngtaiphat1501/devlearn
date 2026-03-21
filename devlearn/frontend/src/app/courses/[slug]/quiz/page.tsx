@@ -64,7 +64,10 @@ export default function QuizPage() {
   const q = questions[current];
 
   if (result) {
-    const scorePct = Math.round((result.score / result.total) * 100);
+    const score = result?.score ?? result?.attempt?.score ?? 0;
+    const total = result?.total ?? result?.attempt?.total ?? 0;
+    const passed = result?.passed ?? result?.attempt?.passed ?? false;
+    const scorePct = total > 0 ? Math.round((score / total) * 100) : 0;
     return (
       <>
         <Navbar />
