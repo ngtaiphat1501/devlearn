@@ -52,7 +52,7 @@ export default function QuizPage() {
   const handleSubmit = () => {
     if (answers.some((a) => a === null)) { toast.error('Trả lời tất cả câu hỏi!'); return; }
     submit(
-      { quizId: quizData.id, answers: answers as number[] },
+     { courseId: course!.id, answers: answers as number[] },
       {
         onSuccess: (data) => setResult(data),
         onError: (e: any) => toast.error(e.response?.data?.message || 'Lỗi nộp bài'),
